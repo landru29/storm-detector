@@ -6,6 +6,11 @@
 
 //#define DEBUG
 
+// Button
+#define BUTTON 4
+#define ROTARY_INTERRUPT 2
+#define STEP   5
+
 //SPI chip select pin
 #define CHIP_SELECT 10
 
@@ -17,6 +22,13 @@
 #define LIGHTNING_INT 0x08
 #define DISTURBER_INT 0x04
 #define NOISE_INT     0x01
+
+#define PAGE_MAIN        1
+#define PAGE_MODE        2
+#define PAGE_NOISE       3
+#define PAGE_WATCHDOG    4
+#define PAGE_REJECTIONS  5
+#define PAGE_LIGHTNING   6
 
 // Interrupt pin for lightning detection
 #define LIGHTNING_INTERRUPT_PIN 3
@@ -35,18 +47,32 @@ unsigned int noiseCount = 0;
 unsigned int disturberCount = 0;
 
 // Detector configuration
-int noise           = 2; // Value between 1-7
-int watchDogVal     = 2; // Value between 1-10
-int spike           = 2; // Value between 1-11
-int lightningThresh = 1; // Value in [1, 5, 9, 16]
+bool modeOut             = true;
+int noise                = 2; // Value between 1-7
+int watchDogVal          = 2; // Value between 1-10
+int spike                = 2; // Value between 1-11
+int lightningThresh[4]   = {1, 5, 9, 16}; // Value in [1, 5, 9, 16]
+int lightningThreshIndex = 0;
 
 // This variable holds the number representing the lightning or non-lightning
 // event issued by the lightning detector.
 byte intVal      = 0;
 
+byte distance;
+
+byte page = 1;
+
+bool buttonUp = true;
+
 void setup() {
+    Wire.begin();
+
+    pinMode(BUTTON, INPUT_PULLUP);
+    pinMode(ROTARY_INTERRUPT, INPUT_PULLUP);
+    pinMode(STEP, INPUT_PULLUP);
+
     // When lightning is detected the interrupt pin goes HIGH.
-    pinMode(LIGHTNING_INTERRUPT_PIN, INPUT);
+    //pinMode(LIGHTNING_INTERRUPT_PIN, INPUT);
 
     #ifdef DEBUG
     Serial.begin(115200);
@@ -117,7 +143,7 @@ void setup() {
     // The lightning detector defaults to an indoor setting at
     // the cost of less sensitivity, if you plan on using this outdoors
     // uncomment the following line:
-    lightning.setIndoorOutdoor(OUTDOOR);
+    lightning.setIndoorOutdoor(modeOut ? OUTDOOR: INDOOR);
 
     // Noise floor setting from 1-7, one being the lowest. Default setting is
     // 2. If you need to check the setting, the corresponding function for
@@ -141,19 +167,187 @@ void setup() {
     // For example you will only get an interrupt after five lightning strikes
     // instead of one. Default is one, and it takes settings of 1, 5, 9 and 16.   
     // Followed by its corresponding read function. Default is zero. 
-    lightning.lightningThreshold(lightningThresh); 
+    lightning.lightningThreshold(lightningThresh[lightningThreshIndex]); 
 
     // When signal is raising on interrupt pin (when a lighting occurs),
     // execute process
     attachInterrupt(digitalPinToInterrupt(LIGHTNING_INTERRUPT_PIN), process, RISING);
+
+    attachInterrupt(digitalPinToInterrupt(ROTARY_INTERRUPT), rotation, FALLING);
+
+    page = 0;
 }
 
 void loop() {
-  /*if (digitalRead(LIGHTNING_INTERRUPT_PIN) == HIGH) {
-      process();
-  }*/
+    /*if (digitalRead(LIGHTNING_INTERRUPT_PIN) == HIGH) {
+        process();
+    }*/
 
-  delay(100); // Do nothing
+    if ((digitalRead(BUTTON) == HIGH) && buttonUp) {
+        buttonUp = false;
+        page++;
+        if (page>6) {
+            page=1;
+        }
+    }
+
+    if (digitalRead(BUTTON) == LOW) {
+        buttonUp = true;
+    }
+
+    switch(page) {
+    default:
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.println("LIGHTNINGS - AS3935 ");
+        display.setCursor(0, 16);
+        display.print("Strike: ");
+        display.println(strikeCount);
+        display.setCursor(0, 24);
+        display.print("Distance: ");
+        display.print(distance);
+        display.println("km");
+
+        display.setCursor(0, 40);
+        display.print("Noise: ");
+        display.println(noiseCount);
+
+        display.setCursor(0, 56);
+        display.print("Disturb: ");
+        display.println(disturberCount);
+        display.display();
+        break;
+
+    case PAGE_MODE:
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.println("LIGHTNINGS - MODE ");
+        display.setCursor(0, 16);
+        display.print("Mode: ");
+        if (modeOut) {
+            display.println("Outdoor");
+        } else {
+            display.println("Indoor");
+        }
+        display.display();
+        break;
+
+    case PAGE_NOISE:
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.println("LIGHTNINGS - NOISE ");
+        display.setCursor(0, 16);
+        display.print("Noise: ");
+        display.println(noise);
+        display.display();
+        break;
+
+    case PAGE_WATCHDOG:
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.println("LIGHTNINGS - WATCHDOG ");
+        display.setCursor(0, 16);
+        display.print("Watchdog: ");
+        display.println(watchDogVal);
+        display.display();
+        break;
+
+    case PAGE_REJECTIONS:
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.println("LIGHTNINGS - REJECT ");
+        display.setCursor(0, 16);
+        display.print("Spike reject: ");
+        display.println(spike);
+        display.display();
+        break;
+
+    case PAGE_LIGHTNING:
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.println("LIGHTNINGS - THRESHOL ");
+        display.setCursor(0, 16);
+        display.print("Threshold: ");
+        display.println(lightningThresh[lightningThreshIndex]);
+        display.display();
+        break;
+    }
+
+    delay(100);
+}
+
+void rotation() {
+    noInterrupts();
+    bool dir = (digitalRead(STEP) == HIGH);
+
+    switch(page) {
+    case PAGE_MODE:
+        modeOut = !modeOut;
+        lightning.setIndoorOutdoor(modeOut ? OUTDOOR: INDOOR);
+        break;
+
+    case PAGE_NOISE:
+        if (dir) {
+            noise++;
+            if (noise>7) {
+                noise=1;
+            }
+        } else {
+            noise--;
+            if (noise<1) {
+                noise = 7;
+            }
+        }
+        lightning.setNoiseLevel(noise);
+        break;
+
+    case PAGE_WATCHDOG:
+        if (dir) {
+            watchDogVal++;
+            if (watchDogVal>10) {
+                watchDogVal = 1;
+            }
+        } else {
+            watchDogVal--;
+            if (watchDogVal<1) {
+                watchDogVal = 10;
+            }
+        }
+        lightning.watchdogThreshold(watchDogVal);
+        break;
+
+    case PAGE_REJECTIONS:
+        if (dir) {
+            spike++;
+            if (spike>11) {
+                spike = 1;
+            }
+        } else {
+            spike--;
+            if (spike<1) {
+                spike = 11;
+            }
+        }
+        lightning.spikeRejection(spike);
+        break;
+
+    case PAGE_LIGHTNING:
+        if (dir) {
+            lightningThreshIndex++;
+            if (lightningThreshIndex>3) {
+                lightningThreshIndex = 0;
+            }
+        } else {
+            lightningThreshIndex--;
+            if (lightningThreshIndex<0) {
+                lightningThreshIndex = 3;
+            }
+        }
+        lightning.lightningThreshold(lightningThresh[lightningThreshIndex]); 
+        break;
+    }
+    delay(100);
+    interrupts();
 }
 
 
@@ -162,7 +356,7 @@ void process() {
     // Hardware has alerted us to an event, now we read the interrupt register
     // to see exactly what it is.
     intVal = lightning.readInterruptReg();
-     switch (intVal) {
+    switch (intVal) {
     case NOISE_INT:
         #ifdef DEBUG
         Serial.println("Noise.");
@@ -171,11 +365,7 @@ void process() {
         // noise rejection.
         // lightning.setNoiseLevel(setNoiseLevel);
         break;
-        display.writeFillRect(0, 40, SCREEN_WIDTH, 8, 0);
-        display.setCursor(0, 40);
-        display.print("Noise ");
-        display.println(++noiseCount);
-        display.display();
+        noiseCount++;
     case DISTURBER_INT:
         #ifdef DEBUG
         Serial.println("Disturber.");
@@ -184,30 +374,18 @@ void process() {
         // disturber rejection.
         // lightning.watchdogThreshold(threshVal);
         break;
-        display.writeFillRect(0, 56, SCREEN_WIDTH, 8, 0);
-        display.setCursor(0, 56);
-        display.print("Disturb ");
-        display.println(++disturberCount);
-        display.display();
+        disturberCount++;
     case LIGHTNING_INT:
         // Lightning! Now how far away is it? Distance estimation takes into
         // account any previously seen events in the last 15 seconds.
-        byte distance = lightning.distanceToStorm();
+        distance = lightning.distanceToStorm();
         #ifdef DEBUG
         Serial.println("Lightning Strike Detected!");
         Serial.print("Approximately: ");
         Serial.print(distance);
         Serial.println("km away!");
         #endif // DEBUG
-        display.writeFillRect(0, 16, SCREEN_WIDTH, 16, 0);
-        display.setCursor(0, 16);
-        display.print("Strike ");
-        display.println(++strikeCount);
-        display.setCursor(0, 24);
-        display.print("Distance: ");
-        display.print(distance);
-        display.println("km");
-        display.display();
+        strikeCount++;
         break;
     }
     interrupts();
