@@ -1,5 +1,6 @@
 #include <Wire.h>
 #include <SPI.h>
+#include <EEPROM.h>
 #include "SparkFun_AS3935.h"
 #include "Adafruit_SSD1306.h"
 #include "splash.h"
@@ -48,11 +49,11 @@ unsigned int disturberCount = 0;
 
 // Detector configuration
 bool modeOut             = true;
-int noise                = 2; // Value between 1-7
-int watchDogVal          = 2; // Value between 1-10
-int spike                = 2; // Value between 1-11
-int lightningThresh[4]   = {1, 5, 9, 16}; // Value in [1, 5, 9, 16]
-int lightningThreshIndex = 0;
+byte noise                = 2; // Value between 1-7
+byte watchDogVal          = 2; // Value between 1-10
+byte spike                = 2; // Value between 1-11
+byte lightningThresh[4]   = {1, 5, 9, 16}; // Value in [1, 5, 9, 16]
+byte lightningThreshIndex = 0;
 
 // This variable holds the number representing the lightning or non-lightning
 // event issued by the lightning detector.
@@ -65,6 +66,8 @@ byte page = 1;
 bool buttonUp = true;
 
 void setup() {
+    loadConfig();
+    
     Wire.begin();
 
     pinMode(BUTTON, INPUT_PULLUP);
@@ -187,6 +190,7 @@ void loop() {
         buttonUp = false;
         page++;
         if (page>6) {
+            saveConfig();
             page=1;
         }
     }
@@ -389,4 +393,36 @@ void process() {
         break;
     }
     interrupts();
+}
+
+void saveConfig() {
+    EEPROM.write(0x00, modeOut ? 1:0);
+    EEPROM.write(0x01, noise);
+    EEPROM.write(0x02, watchDogVal);
+    EEPROM.write(0x03, spike);
+    EEPROM.write(0x04, lightningThreshIndex);
+}
+
+void loadConfig() {
+    modeOut = (EEPROM.read(0x00)==1);
+
+    noise = EEPROM.read(0x01);
+    if ((noise<1) || (noise>7)) {
+        noise = 2;
+    }
+
+    watchDogVal = EEPROM.read(0x02);
+    if ((watchDogVal<1) || (watchDogVal>10)) {
+        watchDogVal = 2;
+    }
+
+    spike = EEPROM.read(0x03);
+    if ((spike<1) || (spike>11)) {
+        spike = 2;
+    }
+
+    lightningThreshIndex = EEPROM.read(0x04);
+    if (lightningThreshIndex>3) {
+        lightningThreshIndex = 0;
+    }
 }

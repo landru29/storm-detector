@@ -20,6 +20,7 @@
                 "/opt/arduino-1.8.12/hardware/arduino/avr/variants/eightanaloginputs",
                 "/opt/arduino-1.8.12/hardware/arduino/avr/libraries/Wire/src",
                 "/opt/arduino-1.8.12/hardware/arduino/avr/libraries/SPI/src",
+                "/opt/arduino-1.8.12/hardware/arduino/avr/libraries/EEPROM/src",
                 "/home/cyrille/Arduino/libraries/SparkFun_AS3935_Lightning_Detector_Arduino_Library/src",
                 "/home/cyrille/Arduino/libraries/Adafruit_SSD1306",
                 "/home/cyrille/Arduino/libraries/Adafruit_GFX_Library",
