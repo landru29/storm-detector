@@ -282,7 +282,7 @@ void loop() {
 
 void rotation() {
     noInterrupts();
-    bool dir = (digitalRead(STEP) == HIGH);
+    bool dir = (digitalRead(STEP) == LOW);
 
     switch(page) {
     case PAGE_MODE:
