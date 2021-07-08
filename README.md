@@ -5,6 +5,7 @@
 - OneWire
 - SparkFun AS3935
 - Adafruit SSD1306
+- Piezzo (optional)
 
 ## Parts
 
@@ -61,3 +62,8 @@
 - Cap1 - <-> Arduino GND
 - Cap2 + <-> Arduino D5
 - Cap2 - <-> Arduino GND
+
+### Piezzo (optional)
+
+- Piezzo <-> Arduino D7
+- Piezzo <-> Arduino GND

@@ -12,6 +12,9 @@
 #define ROTARY_INTERRUPT 2
 #define STEP   5
 
+// Piezzo
+#define PIEZZO 7
+
 //SPI chip select pin
 #define CHIP_SELECT 10
 
@@ -73,6 +76,7 @@ void setup() {
     pinMode(BUTTON, INPUT_PULLUP);
     pinMode(ROTARY_INTERRUPT, INPUT_PULLUP);
     pinMode(STEP, INPUT_PULLUP);
+    pinMode(PIEZZO, OUTPUT);
 
     // When lightning is detected the interrupt pin goes HIGH.
     //pinMode(LIGHTNING_INTERRUPT_PIN, INPUT);
@@ -80,6 +84,8 @@ void setup() {
     #ifdef DEBUG
     Serial.begin(115200);
     #endif // DEBUG
+
+    digitalWrite(PIEZZO, HIGH);
 
     // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
     if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
@@ -99,11 +105,15 @@ void setup() {
         1
     );
 
+    digitalWrite(PIEZZO, LOW);
+
     // Show initial display buffer contents on the screen --
     // the library initializes this with an Adafruit splash screen.
     display.display();
 
     delay(2000); // Pause for 2 seconds
+
+    digitalWrite(PIEZZO, HIGH);
 
     display.setTextSize(1);              // Normal 1:1 pixel scale
     display.setTextColor(SSD1306_WHITE); // Draw white text
@@ -113,6 +123,8 @@ void setup() {
     display.setCursor(0, 0);
     display.println(" LIGHTNINGS - starting ");
     display.display();
+
+    digitalWrite(PIEZZO, LOW);
 
 
     #ifdef DEBUG
@@ -357,6 +369,7 @@ void rotation() {
 
 void process() {
     noInterrupts();
+    digitalWrite(PIEZZO, HIGH);
     // Hardware has alerted us to an event, now we read the interrupt register
     // to see exactly what it is.
     intVal = lightning.readInterruptReg();
@@ -392,6 +405,7 @@ void process() {
         strikeCount++;
         break;
     }
+    digitalWrite(PIEZZO, LOW);
     interrupts();
 }
 
