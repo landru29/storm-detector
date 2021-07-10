@@ -27,12 +27,14 @@
 #define DISTURBER_INT 0x04
 #define NOISE_INT     0x01
 
-#define PAGE_MAIN        1
-#define PAGE_MODE        2
-#define PAGE_NOISE       3
-#define PAGE_WATCHDOG    4
-#define PAGE_REJECTIONS  5
-#define PAGE_LIGHTNING   6
+#define PAGE_MAIN             1
+#define PAGE_MODE             2
+#define PAGE_NOISE            3
+#define PAGE_WATCHDOG         4
+#define PAGE_REJECTIONS       5
+#define PAGE_LIGHTNING        6
+#define PAGE_MASK_DISTURBERS  7
+#define LAST_PAGE             7
 
 // Interrupt pin for lightning detection
 #define LIGHTNING_INTERRUPT_PIN 3
@@ -51,7 +53,8 @@ unsigned int noiseCount = 0;
 unsigned int disturberCount = 0;
 
 // Detector configuration
-bool modeOut             = true;
+bool modeOut              = true;
+bool maskDisturbers       = false;
 byte noise                = 2; // Value between 1-7
 byte watchDogVal          = 2; // Value between 1-10
 byte spike                = 2; // Value between 1-11
@@ -79,7 +82,7 @@ void setup() {
     pinMode(PIEZZO, OUTPUT);
 
     // When lightning is detected the interrupt pin goes HIGH.
-    //pinMode(LIGHTNING_INTERRUPT_PIN, INPUT);
+    pinMode(LIGHTNING_INTERRUPT_PIN, INPUT);
 
     #ifdef DEBUG
     Serial.begin(115200);
@@ -191,6 +194,43 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(ROTARY_INTERRUPT), rotation, FALLING);
 
     page = 0;
+
+    #ifdef DEBUG
+        int enviVal = lightning.readIndoorOutdoor();
+        Serial.print("Are we set for indoor or outdoor: ");  
+        if( enviVal == INDOOR ) {
+            Serial.println("Indoor.");  
+        } else if( enviVal == OUTDOOR ) {
+            Serial.println("Outdoor.");  
+        } else { 
+            Serial.println(enviVal, BIN);
+        }
+        
+        int noiseVal = lightning.readNoiseLevel();
+        Serial.print("Noise Level is set at: ");
+        Serial.println(noiseVal);
+
+        int watchVal = lightning.readWatchdogThreshold();
+        Serial.print("Watchdog Threshold is set to: ");
+        Serial.println(watchVal);
+
+        int spikeVal = lightning.readSpikeRejection();
+        Serial.print("Spike Rejection is set to: ");
+        Serial.println(spikeVal);
+
+        uint8_t lightVal = lightning.readLightningThreshold();
+        Serial.print("The number of strikes before interrupt is triggerd: "); 
+        Serial.println(lightVal); 
+
+        Serial.print("Are disturbers being masked: ");
+        int maskVal = lightning.readMaskDisturber();
+        if (maskVal == 1) {
+            Serial.println("YES"); 
+        } else if (maskVal == 0) {
+            Serial.println("NO"); 
+        }
+
+    #endif // DEBUG
 }
 
 void loop() {
@@ -201,7 +241,7 @@ void loop() {
     if ((digitalRead(BUTTON) == HIGH) && buttonUp) {
         buttonUp = false;
         page++;
-        if (page>6) {
+        if (page>LAST_PAGE) {
             saveConfig();
             page=1;
         }
@@ -287,6 +327,20 @@ void loop() {
         display.println(lightningThresh[lightningThreshIndex]);
         display.display();
         break;
+    
+    case PAGE_MASK_DISTURBERS:
+        display.clearDisplay();
+        display.setCursor(0, 0);
+        display.println("LIGHTNINGS - MASK ");
+        display.setCursor(0, 16);
+        display.print("Mask disturb: ");
+        if (maskDisturbers) {
+            display.println("Yes");
+        } else {
+            display.println("No");
+        }
+        display.display();
+        break;
     }
 
     delay(100);
@@ -354,12 +408,18 @@ void rotation() {
                 lightningThreshIndex = 0;
             }
         } else {
-            lightningThreshIndex--;
-            if (lightningThreshIndex<0) {
+            if (lightningThreshIndex==0) {
                 lightningThreshIndex = 3;
+            } else {
+                lightningThreshIndex--;
             }
         }
         lightning.lightningThreshold(lightningThresh[lightningThreshIndex]); 
+        break;
+
+    case PAGE_MASK_DISTURBERS:
+        maskDisturbers = !maskDisturbers;
+        lightning.maskDisturber(maskDisturbers); 
         break;
     }
     delay(100);
@@ -415,6 +475,7 @@ void saveConfig() {
     EEPROM.write(0x02, watchDogVal);
     EEPROM.write(0x03, spike);
     EEPROM.write(0x04, lightningThreshIndex);
+    EEPROM.write(0x05, maskDisturbers ? 1:0);
 }
 
 void loadConfig() {
@@ -439,4 +500,6 @@ void loadConfig() {
     if (lightningThreshIndex>3) {
         lightningThreshIndex = 0;
     }
+
+    maskDisturbers = (EEPROM.read(0x05)==1);
 }
