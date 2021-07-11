@@ -48,10 +48,11 @@
 SparkFun_AS3935 lightning;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-unsigned int strikeCount = 0;
-unsigned int noiseCount = 0;
+// Counters
+unsigned int strikeCount    = 0;
+unsigned int noiseCount     = 0;
 unsigned int disturberCount = 0;
-unsigned int otherCount = 0;
+unsigned int otherCount     = 0;
 
 // Detector configuration
 bool modeOut              = true;
@@ -61,12 +62,13 @@ byte watchDogVal          = 2; // Value between 1-10
 byte spike                = 2; // Value between 1-11
 byte lightningThresh[4]   = {1, 5, 9, 16}; // Value in [1, 5, 9, 16]
 byte lightningThreshIndex = 0;
+ 
 
 // This variable holds the number representing the lightning or non-lightning
 // event issued by the lightning detector.
 byte intVal      = 0;
-
 byte distance;
+long lightEnergy = 0;
 
 byte page = 1;
 
@@ -188,10 +190,16 @@ void setup() {
     // Followed by its corresponding read function. Default is zero. 
     lightning.lightningThreshold(lightningThresh[lightningThreshIndex]); 
 
+    // "Disturbers" are events that are false lightning events. If you find
+    // yourself seeing a lot of disturbers you can have the chip not report those
+    // events on the interrupt lines. 
+    lightning.maskDisturber(maskDisturbers); 
+
     // When signal is raising on interrupt pin (when a lighting occurs),
     // execute process
     attachInterrupt(digitalPinToInterrupt(LIGHTNING_INTERRUPT_PIN), process, RISING);
 
+    // Manage the rotary encoder
     attachInterrupt(digitalPinToInterrupt(ROTARY_INTERRUPT), rotation, FALLING);
 
     page = 0;
@@ -264,20 +272,23 @@ void loop() {
         display.print("Distance: ");
         display.print(distance);
         display.println("km");
+        display.setCursor(0, 32);
+        display.print("Energy: ");
+        display.println(lightEnergy);
 
-        display.setCursor(0, 40);
+        display.setCursor(0, 48);
         display.print("Noise: ");
         display.println(noiseCount);
 
-        display.setCursor(0, 48);
+        display.setCursor(0, 56);
         display.print("Disturb: ");
         display.println(disturberCount);
 
-        display.setCursor(0, 56);
-        display.print("Other: ");
-        display.print(otherCount);
-        display.print(" / ");
-        display.print(intVal);
+        // display.setCursor(0, 56);
+        // display.print("Other: ");
+        // display.print(otherCount);
+        // display.print(" / ");
+        // display.print(intVal);
         display.display();
         break;
 
@@ -433,11 +444,10 @@ void rotation() {
     interrupts();
 }
 
-
 void process() {
     intVal = lightning.readInterruptReg();
     noInterrupts();
-    for(int i=0; i<10; i++) {
+    for(int i=0; i<1; i++) {
         digitalWrite(PIEZZO, HIGH);
         delay(2);
         digitalWrite(PIEZZO, LOW);
@@ -467,6 +477,7 @@ void process() {
         // Lightning! Now how far away is it? Distance estimation takes into
         // account any previously seen events in the last 15 seconds.
         distance = lightning.distanceToStorm();
+        lightEnergy = lightning.lightningEnergy();
         #ifdef DEBUG
         Serial.println("Lightning Strike Detected!");
         Serial.print("Approximately: ");
