@@ -51,6 +51,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 unsigned int strikeCount = 0;
 unsigned int noiseCount = 0;
 unsigned int disturberCount = 0;
+unsigned int otherCount = 0;
 
 // Detector configuration
 bool modeOut              = true;
@@ -268,9 +269,15 @@ void loop() {
         display.print("Noise: ");
         display.println(noiseCount);
 
-        display.setCursor(0, 56);
+        display.setCursor(0, 48);
         display.print("Disturb: ");
         display.println(disturberCount);
+
+        display.setCursor(0, 56);
+        display.print("Other: ");
+        display.print(otherCount);
+        display.print(" / ");
+        display.print(intVal);
         display.display();
         break;
 
@@ -428,11 +435,15 @@ void rotation() {
 
 
 void process() {
+    intVal = lightning.readInterruptReg();
     noInterrupts();
-    digitalWrite(PIEZZO, HIGH);
+    for(int i=0; i<10; i++) {
+        digitalWrite(PIEZZO, HIGH);
+        delay(2);
+        digitalWrite(PIEZZO, LOW);
+    }
     // Hardware has alerted us to an event, now we read the interrupt register
     // to see exactly what it is.
-    intVal = lightning.readInterruptReg();
     switch (intVal) {
     case NOISE_INT:
         #ifdef DEBUG
@@ -441,8 +452,8 @@ void process() {
         // Too much noise? Uncomment the code below, a higher number means better
         // noise rejection.
         // lightning.setNoiseLevel(setNoiseLevel);
-        break;
         noiseCount++;
+        break;
     case DISTURBER_INT:
         #ifdef DEBUG
         Serial.println("Disturber.");
@@ -450,8 +461,8 @@ void process() {
         // Too many disturbers? Uncomment the code below, a higher number means better
         // disturber rejection.
         // lightning.watchdogThreshold(threshVal);
-        break;
         disturberCount++;
+        break;  
     case LIGHTNING_INT:
         // Lightning! Now how far away is it? Distance estimation takes into
         // account any previously seen events in the last 15 seconds.
@@ -464,8 +475,10 @@ void process() {
         #endif // DEBUG
         strikeCount++;
         break;
+    default:
+        otherCount++;
+        break;
     }
-    digitalWrite(PIEZZO, LOW);
     interrupts();
 }
 
